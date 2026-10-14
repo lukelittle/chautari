@@ -1,0 +1,90 @@
+data "aws_iam_policy_document" "ecs_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:${data.aws_partition.current.partition}:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:*"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+}
+
+# ── Execution role: pull images, write logs, read the injected secrets ──────
+
+resource "aws_iam_role" "execution" {
+  name               = "${var.name}-execution"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "execution" {
+  role       = aws_iam_role.execution.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+data "aws_iam_policy_document" "execution" {
+  statement {
+    sid     = "ReadSecrets"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = concat([
+      aws_secretsmanager_secret.admin_token.arn,
+      aws_secretsmanager_secret.gateway_key.arn,
+      aws_secretsmanager_secret.database_url.arn,
+      aws_secretsmanager_secret.digest_key.arn,
+    ], [for s in aws_secretsmanager_secret.admin_tokens : s.arn], [for s in aws_secretsmanager_secret.provider : s.arn])
+  }
+
+  statement {
+    sid       = "ReadEstate"
+    actions   = ["ssm:GetParameters"]
+    resources = [aws_ssm_parameter.estate.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "execution" {
+  name   = "secrets"
+  role   = aws_iam_role.execution.id
+  policy = data.aws_iam_policy_document.execution.json
+}
+
+# ── Task role: what the running containers may call ─────────────────────────
+
+resource "aws_iam_role" "task" {
+  name               = "${var.name}-task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+[[- if .UsesBedrock ]]
+
+# The estate uses AWS Bedrock (models and/or guardrails). The data plane
+# invokes models; the checkpoint applies Bedrock Guardrails.
+data "aws_iam_policy_document" "bedrock" {
+  statement {
+    sid = "Bedrock"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+      "bedrock:ApplyGuardrail",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:bedrock:*::foundation-model/*",
+      "arn:${data.aws_partition.current.partition}:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+      "arn:${data.aws_partition.current.partition}:bedrock:*:${data.aws_caller_identity.current.account_id}:application-inference-profile/*",
+      "arn:${data.aws_partition.current.partition}:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "bedrock" {
+  name   = "bedrock"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.bedrock.json
+}
+[[- end ]]

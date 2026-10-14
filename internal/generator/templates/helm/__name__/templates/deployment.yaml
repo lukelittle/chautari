@@ -1,0 +1,245 @@
+{{- if not (has .Values.dataplane (list "agentgateway" "litellm")) }}
+{{- fail (printf "dataplane must be agentgateway or litellm, got %q" .Values.dataplane) }}
+{{- end }}
+{{- $secret := include "chautari.secretName" . }}
+{{- $gatewayConfig := printf "/gateway/%s" (include "chautari.gatewayConfigFile" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chautari.fullname" . }}
+  labels:
+    {{- include "chautari.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "chautari.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      annotations:
+        # Roll the pods whenever the estate or extra policies change.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "chautari.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "chautari.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        # Render the data plane config from the CDL alone (no database), so the
+        # gateway has a config at start. The control plane then rewrites it live.
+        - name: render-gateway
+          image: {{ include "chautari.image" (dict "image" .Values.image "default" .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["chautari"]
+          args: ["render-gateway", "--estate", "/etc/chautari/estate.cdl", "--out", {{ $gatewayConfig | quote }}]
+          env:
+            - name: CHAUTARI_DATAPLANE
+              value: {{ .Values.dataplane | quote }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: estate
+              mountPath: /etc/chautari/estate.cdl
+              subPath: estate.cdl
+              readOnly: true
+            - name: gateway-config
+              mountPath: /gateway
+      containers:
+        - name: chautari
+          image: {{ include "chautari.image" (dict "image" .Values.image "default" .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["chautari"]
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: CHAUTARI_ESTATE
+              value: /etc/chautari/estate.cdl
+            - name: CHAUTARI_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_DATABASE_URL
+            - name: CHAUTARI_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_ADMIN_TOKEN
+                  optional: true
+            - name: CHAUTARI_ADMIN_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_ADMIN_TOKENS
+                  optional: true
+            - name: CHAUTARI_DIGEST_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_DIGEST_KEY
+                  optional: true
+            - name: CHAUTARI_GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_GATEWAY_KEY
+            - name: CHAUTARI_DATAPLANE
+              value: {{ .Values.dataplane | quote }}
+            - name: CHAUTARI_GATEWAY_URL
+              value: http://127.0.0.1:3000
+            {{- if .Values.gateway.a2a }}
+            - name: CHAUTARI_GATEWAY_A2A_URL
+              value: http://127.0.0.1:3100
+            {{- end }}
+            - name: CHAUTARI_GATEWAY_CONFIG
+              value: {{ $gatewayConfig | quote }}
+            {{- if .Values.policies }}
+            - name: CHAUTARI_POLICY_DIR
+              value: /etc/chautari/policy
+            {{- end }}
+            {{- if .Values.otel.endpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+            {{- end }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.otel.serviceName | quote }}
+            {{- if .Values.aws.region }}
+            - name: AWS_REGION
+              value: {{ .Values.aws.region | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: estate
+              mountPath: /etc/chautari/estate.cdl
+              subPath: estate.cdl
+              readOnly: true
+            {{- if .Values.policies }}
+            - name: policy
+              mountPath: /etc/chautari/policy
+              readOnly: true
+            {{- end }}
+            - name: gateway-config
+              mountPath: /gateway
+            - name: tmp
+              mountPath: /tmp
+        # The data plane sidecar. It listens on 127.0.0.1-reachable ports 3000
+        # (LLM, MCP) and 3100 (A2A) inside the pod only; no Service exposes them.
+        - name: gateway
+          image: {{ include "chautari.image" (dict "image" .Values.gateway.image "default" "latest") }}
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          args: {{ include "chautari.gatewayArgs" . }}
+          env:
+            - name: CHAUTARI_GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: CHAUTARI_GATEWAY_KEY
+            {{- range $name, $_ := .Values.providerKeys }}
+            - name: {{ $name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $name }}
+                  optional: true
+            {{- end }}
+            {{- if .Values.aws.region }}
+            - name: AWS_REGION
+              value: {{ .Values.aws.region | quote }}
+            {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            {{- toYaml .Values.gateway.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          volumeMounts:
+            - name: gateway-config
+              mountPath: /gateway
+              readOnly: true
+            - name: gateway-tmp
+              mountPath: /tmp
+      volumes:
+        - name: estate
+          configMap:
+            name: {{ include "chautari.fullname" . }}
+        {{- if .Values.policies }}
+        - name: policy
+          configMap:
+            name: {{ include "chautari.fullname" . }}-policy
+        {{- end }}
+        - name: gateway-config
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: gateway-tmp
+          emptyDir:
+            sizeLimit: 256Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

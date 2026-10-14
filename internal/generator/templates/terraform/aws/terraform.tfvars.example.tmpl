@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars and fill in.
+
+vpc_id             = "vpc-0123456789abcdef0"
+private_subnet_ids = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
+public_subnet_ids  = ["subnet-0cccccccccccccccc", "subnet-0dddddddddddddddd"]
+
+# Serve HTTPS (recommended). Leave empty for plain HTTP on port 80.
+certificate_arn = ""
+
+# Who may reach the load balancer.
+allowed_cidrs = ["10.0.0.0/8"]
+
+# Defaults from estate.cdl, shown for reference.
+# name          = [[ .Name | quote ]]
+# region        = [[ with .Estate.Region ]][[ . | quote ]][[ else ]]"us-east-1"[[ end ]]
+# image         = [[ .Image | quote ]]
+# gateway_image = [[ .GatewayImage | quote ]]
+
+# desired_count       = 2
+# cpu                 = 1024
+# memory              = 2048
+# db_instance_class   = "db.t4g.micro"
+# db_multi_az         = true
+# deletion_protection = true
+# otel_endpoint       = "http://otel-collector.internal:4318"

@@ -1,0 +1,9 @@
+Chautari
+Copyright 2026 The Chautari Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes the agentgateway v1.6.0 configuration JSON schema
+(internal/dataplane/testdata/agentgateway-v1.6.0.schema.json), from
+https://github.com/agentgateway/agentgateway, licensed under the Apache
+License, Version 2.0. Copyright The agentgateway Authors.

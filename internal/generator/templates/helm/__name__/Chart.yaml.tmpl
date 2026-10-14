@@ -1,0 +1,18 @@
+apiVersion: v2
+name: [[ .Name ]]
+description: [[ printf "Chautari AI control plane for %s: governed checkpoint, admin API and %s data plane, generated from estate.cdl." (or .Estate.Org .Estate.Name) .Dataplane | quote ]]
+type: application
+# Chart version follows the Chautari release that generated it.
+version: [[ if eq .Version "dev" ]]"0.0.0-dev"[[ else ]][[ .Version | quote ]][[ end ]]
+appVersion: [[ .Version | quote ]]
+kubeVersion: ">=1.25.0-0"
+keywords:
+  - ai-gateway
+  - governance
+  - [[ .Dataplane ]]
+home: https://github.com/lukelittle/chautari
+sources:
+  - https://github.com/lukelittle/chautari
+annotations:
+  chautari.dev/estate: [[ .Estate.Name | quote ]]
+  chautari.dev/dataplane: [[ .Dataplane | quote ]]

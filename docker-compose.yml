@@ -1,0 +1,95 @@
+# Chautari demo: `docker compose up`, then open http://localhost:8080
+# (admin token: chautari-demo).
+#
+# The Himalayan Bank estate (examples/himalayan-bank.cdl) on an offline mock
+# provider, behind agentgateway, with Postgres, OpenTelemetry and a traffic
+# generator that keeps the dashboards honest. Nothing here talks to a real
+# model provider. For your own estate, run `chautari generate`.
+
+name: chautari-demo
+
+x-image: &image
+  image: chautari:dev
+  build:
+    context: .
+    args:
+      VERSION: demo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chautari
+      POSTGRES_DB: chautari
+      POSTGRES_PASSWORD: chautari-demo
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chautari -d chautari"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    volumes:
+      - ./deploy/demo/otel-collector.yaml:/etc/otelcol/collector.yaml:ro
+
+  chautari:
+    <<: *image
+    command: ["chautari", "serve"]
+    environment:
+      CHAUTARI_ESTATE: /etc/chautari/estate.cdl
+      CHAUTARI_ADMIN_TOKEN: ${CHAUTARI_ADMIN_TOKEN:-chautari-demo}
+      CHAUTARI_GATEWAY_KEY: ${CHAUTARI_GATEWAY_KEY:-demo-internal-gateway-key}
+      CHAUTARI_DATABASE_URL: postgres://chautari:chautari-demo@postgres:5432/chautari?sslmode=disable
+      CHAUTARI_GATEWAY_URL: http://gateway:3000
+      CHAUTARI_GATEWAY_A2A_URL: http://gateway:3100
+      CHAUTARI_GATEWAY_CONFIG: /gateway/gateway.yaml
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: chautari
+    volumes:
+      - ./examples/himalayan-bank.cdl:/etc/chautari/estate.cdl:ro
+      - gateway-config:/gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "chautari", "healthcheck"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The data plane. Not published: the checkpoint is the only way in.
+  gateway:
+    image: cr.agentgateway.dev/agentgateway:v1.6.0
+    command: ["-f", "/gateway/gateway.yaml"]
+    environment:
+      CHAUTARI_GATEWAY_KEY: ${CHAUTARI_GATEWAY_KEY:-demo-internal-gateway-key}
+    volumes:
+      - gateway-config:/gateway:ro
+    depends_on:
+      chautari:
+        condition: service_healthy
+
+  mock-llm:
+    <<: *image
+    command: ["mock-llm"]
+
+  traffic:
+    <<: *image
+    command: ["chautari", "demo", "traffic", "--server", "http://chautari:8080", "--rate", "2"]
+    environment:
+      CHAUTARI_ADMIN_TOKEN: ${CHAUTARI_ADMIN_TOKEN:-chautari-demo}
+    depends_on:
+      chautari:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  gateway-config:

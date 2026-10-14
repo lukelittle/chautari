@@ -1,0 +1,209 @@
+# Inputs for the [[ .Name ]] Chautari stack on AWS (ECS Fargate + RDS).
+# Defaults come from estate.cdl; override them in terraform.tfvars.
+
+variable "name" {
+  description = "Name prefix for every resource."
+  type        = string
+  default     = [[ .Name | quote ]]
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{0,39}$", var.name))
+    error_message = "name must be lowercase letters, digits and hyphens, start with a letter, at most 40 characters."
+  }
+}
+
+variable "region" {
+  description = "AWS region to deploy into."
+  type        = string
+  default     = [[ with .Estate.Region ]][[ . | quote ]][[ else ]]"us-east-1"[[ end ]]
+}
+
+variable "tags" {
+  description = "Extra tags applied to every resource."
+  type        = map(string)
+  default     = {}
+}
+
+# ── Network (bring your own VPC) ────────────────────────────────────────────
+
+variable "vpc_id" {
+  description = "VPC to deploy into."
+  type        = string
+}
+
+variable "private_subnet_ids" {
+  description = "Private subnets (at least two AZs) for the ECS tasks and RDS. They need egress to ECR, Secrets Manager, SSM, CloudWatch Logs and the model providers (NAT gateway or VPC endpoints)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.private_subnet_ids) >= 2
+    error_message = "private_subnet_ids needs at least two subnets in different availability zones."
+  }
+}
+
+variable "public_subnet_ids" {
+  description = "Subnets for the load balancer (public for an internet-facing ALB; private ones work with alb_internal = true)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.public_subnet_ids) >= 2
+    error_message = "public_subnet_ids needs at least two subnets in different availability zones."
+  }
+}
+
+variable "allowed_cidrs" {
+  description = "CIDR blocks allowed to reach the load balancer."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "alb_internal" {
+  description = "Create an internal (not internet-facing) load balancer."
+  type        = bool
+  default     = false
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN. When set the ALB serves HTTPS on 443 and redirects 80 to it; when empty it serves plain HTTP on 80."
+  type        = string
+  default     = ""
+}
+
+# ── Containers ──────────────────────────────────────────────────────────────
+
+variable "image" {
+  description = "Chautari container image (control plane and CLI)."
+  type        = string
+  default     = [[ .Image | quote ]]
+}
+
+variable "gateway_image" {
+  description = "Data plane container image."
+  type        = string
+  default     = [[ .GatewayImage | quote ]]
+}
+
+variable "dataplane" {
+  description = "Data plane adapter. Must match the estate."
+  type        = string
+  default     = [[ .Dataplane | quote ]]
+
+  validation {
+    condition     = contains(["agentgateway", "litellm"], var.dataplane)
+    error_message = "dataplane must be agentgateway or litellm."
+  }
+}
+
+variable "enable_a2a" {
+  description = "Route A2A traffic through the gateway's A2A listener (:3100)."
+  type        = bool
+  default     = [[ .HasA2A ]]
+}
+
+variable "desired_count" {
+  description = "Number of tasks. Every task resyncs registry state from Postgres, so more than one is safe."
+  type        = number
+  default     = 2
+}
+
+variable "cpu" {
+  description = "Task CPU units (shared by the control plane and the data plane sidecar)."
+  type        = number
+  default     = 1024
+}
+
+variable "memory" {
+  description = "Task memory in MiB."
+  type        = number
+  default     = 2048
+}
+
+variable "cpu_architecture" {
+  description = "X86_64 or ARM64. The images must be built for it."
+  type        = string
+  default     = "X86_64"
+}
+
+variable "assign_public_ip" {
+  description = "Give tasks a public IP (only for subnets without NAT)."
+  type        = bool
+  default     = false
+}
+
+variable "otel_endpoint" {
+  description = "OTLP/HTTP endpoint (port 4318) for traces and metrics. Empty disables export."
+  type        = string
+  default     = ""
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch log retention."
+  type        = number
+  default     = 90
+}
+
+# ── Estate ──────────────────────────────────────────────────────────────────
+
+variable "estate_cdl_path" {
+  description = "Path to the estate CDL, relative to this directory. Its contents are stored in SSM and injected as CHAUTARI_ESTATE_CDL."
+  type        = string
+  default     = "../../estate.cdl"
+}
+
+# Provider credentials the data plane reads. One Secrets Manager secret is
+# created per name with a placeholder value; put the real key in after apply.
+variable "provider_key_names" {
+  description = "Environment variable names of provider API keys (from estate.cdl)."
+  type        = list(string)
+  default     = [[ if .ProviderEnvs ]][[ "[" ]][[ range $i, $e := .ProviderEnvs ]][[ if $i ]], [[ end ]][[ quote $e ]][[ end ]][[ "]" ]][[ else ]][][[ end ]]
+}
+
+# ── Database ────────────────────────────────────────────────────────────────
+
+variable "db_instance_class" {
+  description = "RDS instance class."
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "Initial storage in GiB (autoscaling up to db_max_allocated_storage)."
+  type        = number
+  default     = 20
+}
+
+variable "db_max_allocated_storage" {
+  description = "Storage autoscaling ceiling in GiB."
+  type        = number
+  default     = 100
+}
+
+variable "db_multi_az" {
+  description = "Run RDS in Multi-AZ."
+  type        = bool
+  default     = true
+}
+
+variable "db_backup_retention_days" {
+  description = "Automated backup retention."
+  type        = number
+  default     = 14
+}
+
+variable "deletion_protection" {
+  description = "Protect the database (and the load balancer) from deletion."
+  type        = bool
+  default     = true
+}
+
+variable "secret_recovery_window_days" {
+  description = "Secrets Manager recovery window on deletion (0 deletes immediately)."
+  type        = number
+  default     = 7
+}
+
+variable "per_person_admin_tokens" {
+  description = "Use per-person admin tokens (CHAUTARI_ADMIN_TOKENS) instead of one shared token. Identities then come from the token, so separation of duties is enforced. Recommended for production."
+  type        = bool
+  default     = true
+}

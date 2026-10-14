@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chautari_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      CHAUTARI_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/chautari_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - name: license headers (Apache 2.0)
+        run: go run ./tools/licensecheck
+      - name: test (offline, against the mock provider; Postgres integration included)
+        run: go test -race -count=1 ./...
+      - name: generate is idempotent
+        run: |
+          go run ./cmd/chautari generate examples/himalayan-bank.cdl -o /tmp/out --demo -q
+          go run ./cmd/chautari generate examples/himalayan-bank.cdl -o /tmp/out --demo -q | grep "0 created, 0 updated"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t chautari:ci .
+      - run: docker run --rm chautari:ci chautari version
+      - run: docker compose config -q

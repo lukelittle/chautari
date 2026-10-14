@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="same-origin">
+<title>chautari</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+<script type="module" src="/assets/app.js"></script>
+</head>
+<body class="booting">
+<div class="flags" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<a class="skip" href="#main">Skip to content</a>
+<div class="shell">
+  <header class="rail">
+    <a class="brand" href="#/overview" aria-label="chautari, overview">
+      <svg class="leaf" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path class="leaf-body" d="M16 2.5c.9 3.6 3.4 6.5 7.6 9.4 5.4 3.8 5.6 10.6.6 13.4-3 1.6-6.1 1.2-8.2-.9-2.1 2.1-5.2 2.5-8.2.9-5-2.8-4.8-9.6.6-13.4C12.6 9 15.1 6.1 16 2.5z"/>
+        <path class="leaf-vein" d="M16 6.5v24M16 13l-4.5-2.6M16 13l4.5-2.6M16 17.5l-6.5-3M16 17.5l6.5-3M16 21.5l-6-1.8M16 21.5l6-1.8"/>
+      </svg>
+      <span class="wordmark">chautari</span>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <ul>
+        <li><a href="#/overview" data-route="overview"><span class="nav-n" aria-hidden="true">i</span>Overview</a></li>
+        <li><a href="#/estate" data-route="estate"><span class="nav-n" aria-hidden="true">ii</span>Estate</a></li>
+        <li><a href="#/approvals" data-route="approvals"><span class="nav-n" aria-hidden="true">iii</span>Approvals<span class="nav-count" id="pending-count" hidden></span></a></li>
+        <li><a href="#/keys" data-route="keys"><span class="nav-n" aria-hidden="true">iv</span>Keys</a></li>
+        <li><a href="#/guardrails" data-route="guardrails"><span class="nav-n" aria-hidden="true">v</span>Blocks &amp; guardrails</a></li>
+        <li><a href="#/spend" data-route="spend"><span class="nav-n" aria-hidden="true">vi</span>Spend</a></li>
+        <li><a href="#/audit" data-route="audit"><span class="nav-n" aria-hidden="true">vii</span>Audit log</a></li>
+        <li><a href="#/controls" data-route="controls"><span class="nav-n" aria-hidden="true">viii</span>Controls</a></li>
+      </ul>
+    </nav>
+    <div class="rail-foot">
+      <p class="rail-estate" id="rail-estate"></p>
+      <p class="rail-actor">Signed in as <strong id="rail-actor"></strong></p>
+      <button type="button" class="link-button" id="sign-out">Sign out</button>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<dialog class="confirm" id="confirm" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-body"></p>
+    <div class="confirm-actions">
+      <button value="cancel" class="button quiet" id="confirm-cancel">Cancel</button>
+      <button value="ok" class="button danger" id="confirm-ok">Confirm</button>
+    </div>
+  </form>
+</dialog>
+<noscript><p class="noscript">The chautari admin needs JavaScript. The API is at <code>/api</code>.</p></noscript>
+</body>
+</html>

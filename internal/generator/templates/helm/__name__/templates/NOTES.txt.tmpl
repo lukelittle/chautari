@@ -1,0 +1,40 @@
+[[- $app := "my-app" ]][[ with .Estate.Apps ]][[ $app = (index . 0).Name ]][[ end ]]
+[[- $model := "my-model" ]][[ range .Estate.Models ]][[ if and .Approved (eq $model "my-model") ]][[ $model = .Name ]][[ end ]][[ end -]]
+Chautari [[ .Version ]] for [[ or .Estate.Org .Estate.Name ]] is deployed as {{ include "chautari.fullname" . }} in namespace {{ .Release.Namespace }}.
+Data plane: {{ .Values.dataplane }} (sidecar, not exposed outside the pod).
+
+1. Reach the admin UI and API:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+     export CHAUTARI_URL=http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}
+{{- end }}
+{{- else }}
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "chautari.fullname" . }} 8080:{{ .Values.service.port }}
+     export CHAUTARI_URL=http://127.0.0.1:8080
+{{- end }}
+   Then open $CHAUTARI_URL in a browser.
+
+2. Get the admin token:
+     export CHAUTARI_ADMIN_TOKEN=$(kubectl -n {{ .Release.Namespace }} get secret {{ include "chautari.secretName" . }} \
+       -o jsonpath='{.data.CHAUTARI_ADMIN_TOKEN}' | base64 -d)
+
+3. Mint an API key for an app declared in the estate (the key is shown once):
+     curl -sS -X POST "$CHAUTARI_URL/api/keys" \
+       -H "Authorization: Bearer $CHAUTARI_ADMIN_TOKEN" \
+       -H "Content-Type: application/json" \
+       -d '{"app": "[[ $app ]]"}'
+
+4. Call the governed checkpoint (OpenAI-compatible):
+     curl -sS "$CHAUTARI_URL/v1/chat/completions" \
+       -H "Authorization: Bearer ck_..." \
+       -H "Content-Type: application/json" \
+       -d '{"model": "[[ $model ]]", "messages": [{"role": "user", "content": "Hello"}]}'
+{{- if and (not .Values.existingSecret) .Values.providerKeys }}
+{{- $missing := list }}
+{{- range $env, $v := .Values.providerKeys }}{{ if not $v }}{{ $missing = append $missing $env }}{{ end }}{{ end }}
+{{- if $missing }}
+
+WARNING: no value set for provider credential(s): {{ join ", " $missing }}.
+         Set them with --set providerKeys.NAME=... or use existingSecret.
+{{- end }}
+{{- end }}

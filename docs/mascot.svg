@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Chautari mascot: a friendly red panda">
+  <!-- Body -->
+  <ellipse cx="64" cy="90" rx="32" ry="24" fill="#c45c3a"/>
+
+  <!-- Belly -->
+  <ellipse cx="64" cy="92" rx="20" ry="16" fill="#f5e6d3"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="52" r="28" fill="#c45c3a"/>
+
+  <!-- Face mask (white) -->
+  <ellipse cx="64" cy="56" rx="18" ry="14" fill="#f5e6d3"/>
+
+  <!-- Ears -->
+  <ellipse cx="40" cy="32" rx="10" ry="12" fill="#c45c3a"/>
+  <ellipse cx="88" cy="32" rx="10" ry="12" fill="#c45c3a"/>
+  <ellipse cx="40" cy="32" rx="6" ry="8" fill="#f5e6d3"/>
+  <ellipse cx="88" cy="32" rx="6" ry="8" fill="#f5e6d3"/>
+
+  <!-- Eye patches (dark) -->
+  <ellipse cx="52" cy="50" rx="8" ry="6" fill="#4a2c20"/>
+  <ellipse cx="76" cy="50" rx="8" ry="6" fill="#4a2c20"/>
+
+  <!-- Eyes -->
+  <circle cx="52" cy="50" r="5" fill="#1a1a1a"/>
+  <circle cx="76" cy="50" r="5" fill="#1a1a1a"/>
+  <circle cx="54" cy="48" r="2" fill="#fff"/>
+  <circle cx="78" cy="48" r="2" fill="#fff"/>
+
+  <!-- Nose -->
+  <ellipse cx="64" cy="60" rx="4" ry="3" fill="#1a1a1a"/>
+
+  <!-- Smile -->
+  <path d="M58 65 Q64 70 70 65" stroke="#4a2c20" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Whisker marks -->
+  <circle cx="50" cy="58" r="1.5" fill="#e8d4c0"/>
+  <circle cx="78" cy="58" r="1.5" fill="#e8d4c0"/>
+
+  <!-- Arms/paws -->
+  <ellipse cx="38" cy="88" rx="8" ry="10" fill="#c45c3a"/>
+  <ellipse cx="90" cy="88" rx="8" ry="10" fill="#c45c3a"/>
+
+  <!-- Tail (fluffy, striped) -->
+  <path d="M96 90 Q120 80 115 60 Q130 70 118 95 Q105 105 96 95" fill="#c45c3a"/>
+  <path d="M102 82 Q108 78 106 72" stroke="#4a2c20" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M108 88 Q114 84 112 78" stroke="#4a2c20" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M112 94 Q118 90 116 84" stroke="#4a2c20" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- Feet -->
+  <ellipse cx="50" cy="112" rx="10" ry="6" fill="#4a2c20"/>
+  <ellipse cx="78" cy="112" rx="10" ry="6" fill="#4a2c20"/>
+</svg>

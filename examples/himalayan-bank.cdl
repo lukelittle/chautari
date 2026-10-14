@@ -1,0 +1,104 @@
+// Himalayan Bank: the demo estate.
+// Three teams, four models, two MCP tools, one A2A agent, and the guardrails
+// a bank's second line of defence would ask for on day one.
+
+estate himalayan-bank {
+  org "Himalayan Bank",
+  dataplane agentgateway,
+  region us-east-1,
+  environment demo,
+  default-data-class internal
+}
+
+// ── Providers ───────────────────────────────────────────────────────────────
+// In the demo every provider points at the offline mock. Swap the endpoint
+// and type for production.
+provider mock { type openai-compatible, endpoint "http://mock-llm:8090/v1" }
+
+// ── Models ──────────────────────────────────────────────────────────────────
+model claude-sonnet {
+  provider mock, id "claude-sonnet-4-5",
+  approved true, data-class confidential, risk-tier medium,
+  cost-in 3 usd/mtok, cost-out 15 usd/mtok,
+  description "General-purpose assistant model for internal work"
+}
+
+model claude-haiku {
+  provider mock, id "claude-haiku-4-5",
+  approved true, data-class internal, risk-tier low,
+  cost-in 1 usd/mtok, cost-out 5 usd/mtok
+}
+
+model gpt-4o {
+  provider mock, id "gpt-4o",
+  approved true, data-class internal, risk-tier medium,
+  cost-in 2.5 usd/mtok, cost-out 10 usd/mtok
+}
+
+// Requested by data science, not yet through model risk review.
+model llama-70b {
+  provider mock, id "llama-3.3-70b",
+  approved false, data-class public, risk-tier high,
+  cost-in 0.6 usd/mtok, cost-out 0.6 usd/mtok,
+  description "Open-weights model for experimentation"
+}
+
+// ── MCP tools ───────────────────────────────────────────────────────────────
+// Loan tickets mention customers, so the lending app (confidential by
+// default) may only use this tool because it is approved for that class.
+tool jira-mcp {
+  endpoint "http://mock-llm:8090/mcp", scope read, owners [platform-team],
+  allow [search_issues, get_issue], approved true, data-class confidential
+}
+
+tool core-banking-mcp {
+  endpoint "http://mock-llm:8090/mcp", scope write, owners [lending],
+  data-class confidential, approved false,
+  description "Read/write access to loan servicing records"
+}
+
+// ── Guardrails ──────────────────────────────────────────────────────────────
+policy pii { redact inbound, block outbound ssn, card }
+
+policy prompt-injection { block inbound injection }
+
+policy no-investment-advice {
+  block both topic,
+  topics ["guaranteed returns", "insider tip", "crypto pump"],
+  applies-to [wealth]
+}
+
+// ── Teams ───────────────────────────────────────────────────────────────────
+team lending {
+  models [claude-sonnet, claude-haiku], tools [jira-mcp],
+  budget 2000 usd/month, rate 200k tokens/min,
+  clearance confidential, owner "lending-ai@himalayan.bank"
+}
+
+team wealth {
+  models [claude-haiku, gpt-4o],
+  budget 800 usd/month, rate 50k tokens/min,
+  clearance internal, owner "wealth-ai@himalayan.bank"
+}
+
+team platform-team {
+  models [claude-sonnet, claude-haiku, gpt-4o], tools [jira-mcp],
+  budget 500 usd/month, clearance internal
+}
+
+// ── Apps ────────────────────────────────────────────────────────────────────
+app loan-assistant {
+  team lending, budget 300 usd/month, rate 60k tokens/min,
+  key-budget 25 usd/day, data-class confidential
+}
+
+app advisor-copilot { team wealth, budget 150 usd/month, rate 20k tokens/min }
+
+app ops-bot { team platform-team, budget 50 usd/month }
+
+// ── Agents (A2A) ────────────────────────────────────────────────────────────
+agent underwriting-agent {
+  team lending, model claude-sonnet, tools [jira-mcp],
+  endpoint "mock-llm:8090", approved true,
+  description "Drafts credit memos for underwriters"
+}

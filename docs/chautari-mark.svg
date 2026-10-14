@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Chautari">
+  <!-- Red panda face mark -->
+  <!-- Head -->
+  <circle cx="48" cy="48" r="36" fill="#c45c3a"/>
+
+  <!-- Face mask (white) -->
+  <ellipse cx="48" cy="54" rx="24" ry="18" fill="#f5e6d3"/>
+
+  <!-- Ears -->
+  <ellipse cx="22" cy="22" rx="12" ry="14" fill="#c45c3a"/>
+  <ellipse cx="74" cy="22" rx="12" ry="14" fill="#c45c3a"/>
+  <ellipse cx="22" cy="22" rx="7" ry="9" fill="#f5e6d3"/>
+  <ellipse cx="74" cy="22" rx="7" ry="9" fill="#f5e6d3"/>
+
+  <!-- Eye patches (dark) -->
+  <ellipse cx="36" cy="46" rx="10" ry="7" fill="#4a2c20"/>
+  <ellipse cx="60" cy="46" rx="10" ry="7" fill="#4a2c20"/>
+
+  <!-- Eyes -->
+  <circle cx="36" cy="46" r="6" fill="#1a1a1a"/>
+  <circle cx="60" cy="46" r="6" fill="#1a1a1a"/>
+  <circle cx="38" cy="44" r="2.5" fill="#fff"/>
+  <circle cx="62" cy="44" r="2.5" fill="#fff"/>
+
+  <!-- Nose -->
+  <ellipse cx="48" cy="58" rx="5" ry="4" fill="#1a1a1a"/>
+
+  <!-- Smile -->
+  <path d="M40 66 Q48 74 56 66" stroke="#4a2c20" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Whisker marks -->
+  <circle cx="30" cy="56" r="2" fill="#e8d4c0"/>
+  <circle cx="66" cy="56" r="2" fill="#e8d4c0"/>
+</svg>

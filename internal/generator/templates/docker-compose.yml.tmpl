@@ -1,0 +1,127 @@
+# [[ .Estate.Org ]]: Chautari stack, generated from estate.cdl.
+# Regenerate with `chautari generate`; edits to this file are preserved
+# (the generator will skip it and tell you).
+#
+#   cp .env.example .env   # then set the secrets
+#   docker compose up
+#
+# Admin UI and API: http://localhost:8080   Checkpoint (OpenAI-compatible): http://localhost:8080/v1
+name: [[ .Name ]]
+
+x-chautari-env: &chautari-env
+  CHAUTARI_ADMIN_TOKENS: ${CHAUTARI_ADMIN_TOKENS:-}
+  CHAUTARI_ADMIN_TOKEN: ${CHAUTARI_ADMIN_TOKEN:-}
+  CHAUTARI_DIGEST_KEY: ${CHAUTARI_DIGEST_KEY:?set CHAUTARI_DIGEST_KEY in .env}
+  CHAUTARI_GATEWAY_KEY: ${CHAUTARI_GATEWAY_KEY:?set CHAUTARI_GATEWAY_KEY in .env}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chautari
+      POSTGRES_DB: chautari
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chautari -d chautari"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol/collector.yaml:ro
+    restart: unless-stopped
+
+  chautari:
+    image: [[ .Image ]]
+    command: ["chautari", "serve"]
+    environment:
+      <<: *chautari-env
+      CHAUTARI_ESTATE: /etc/chautari/estate.cdl
+      CHAUTARI_DATABASE_URL: postgres://chautari:${POSTGRES_PASSWORD}@postgres:5432/chautari?sslmode=disable
+      CHAUTARI_DATAPLANE: [[ .Dataplane ]]
+      CHAUTARI_GATEWAY_URL: http://gateway:3000
+[[- if .HasA2A ]]
+      CHAUTARI_GATEWAY_A2A_URL: http://gateway:3100
+[[- end ]]
+      CHAUTARI_GATEWAY_CONFIG: /gateway/[[ .GatewayConfigFile ]]
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: chautari
+[[- if .UsesBedrock ]]
+      AWS_REGION: ${AWS_REGION:-[[ .Estate.Region ]]}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+[[- end ]]
+    volumes:
+      - ./estate.cdl:/etc/chautari/estate.cdl:ro
+      - gateway-config:/gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "chautari", "healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # The data plane. Not published: the checkpoint is the only way in.
+  gateway:
+[[- if eq .Dataplane "litellm" ]]
+    image: [[ .GatewayImage ]]
+    command: ["--config", "/gateway/litellm.yaml", "--port", "3000"]
+[[- else ]]
+    image: [[ .GatewayImage ]]
+    command: ["-f", "/gateway/gateway.yaml"]
+[[- end ]]
+    environment:
+      CHAUTARI_GATEWAY_KEY: ${CHAUTARI_GATEWAY_KEY}
+[[- range .ProviderEnvs ]]
+      [[ . ]]: ${[[ . ]]:-}
+[[- end ]]
+[[- if .UsesBedrock ]]
+      AWS_REGION: ${AWS_REGION:-[[ .Estate.Region ]]}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+[[- end ]]
+    volumes:
+      - gateway-config:/gateway:ro
+    depends_on:
+      chautari:
+        condition: service_healthy
+    restart: unless-stopped
+[[- if .Demo ]]
+
+  # ── Demo only ────────────────────────────────────────────────────────────
+  # An offline, OpenAI-compatible provider plus MCP and A2A endpoints.
+  mock-llm:
+    image: [[ .Image ]]
+    command: ["mock-llm"]
+    restart: unless-stopped
+
+  # Mints keys for every app and sends a steady mix of good and bad traffic.
+  traffic:
+    image: [[ .Image ]]
+    command: ["chautari", "demo", "traffic", "--server", "http://chautari:8080", "--rate", "2"]
+    environment:
+      # Mints keys through the admin API: needs a shared token, or a
+      # personal token for a "demo-traffic" administrator.
+      CHAUTARI_ADMIN_TOKEN: ${CHAUTARI_TRAFFIC_TOKEN:-${CHAUTARI_ADMIN_TOKEN:-}}
+    depends_on:
+      chautari:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+[[- end ]]
+
+volumes:
+  postgres-data:
+  gateway-config:
